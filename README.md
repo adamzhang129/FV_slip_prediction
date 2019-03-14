@@ -2,7 +2,7 @@
 This is repository for slip prediction of vision-based tactile sensor FingerVision.
 
 ## Usage guide
-First, git clone this repo down to a directory, then download [dataset]{https://hkustconnect-my.sharepoint.com/:u:/g/personal/yzhangfr_connect_ust_hk/EaUN_EOlAWRJhcy2QTNAoNIB3R6K2DX8bnePJAWwWKdtvA?e=GruTKH}
+First, git clone this repo down to a directory, then download [dataset](https://hkustconnect-my.sharepoint.com/:u:/g/personal/yzhangfr_connect_ust_hk/EaUN_EOlAWRJhcy2QTNAoNIB3R6K2DX8bnePJAWwWKdtvA?e=GruTKH)
 and unzip it along side with this repository folder.
 
 First check if the dataloader in convLSTM_dataset.py can run correctly by:
