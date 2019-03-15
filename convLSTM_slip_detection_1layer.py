@@ -86,6 +86,10 @@ class ConvLSTMCell(nn.Module):
 
 
 
+
+
+
+
 from convLSTM_dataset import *
 from torch.utils.data import DataLoader
 
@@ -103,7 +107,7 @@ def _main():
     hidden_size = 64 # 64           # hidden state size
     lr = 1e-5     # learning rate
     n_frames = 10           # sequence length
-    max_epoch = 50  # number of epochs
+    max_epoch = 1  # number of epochs
 
     convlstm_dataset = convLSTM_Dataset(dataset_dir='../dataset/resample_skipping',
                                         n_class=2,
@@ -284,6 +288,8 @@ def _main():
     import time
 
     start = time.time()
+    y_true = []
+    y_pred = []
     for test_step, test_sample_batched in enumerate(test_dataloader):
         x = test_sample_batched['frames']
         y = test_sample_batched['target']
@@ -303,13 +309,19 @@ def _main():
 
         _, argmax_test = torch.max(out_test, 1)
 
-        print 'show a batch in test set:'
-        print y
-        print argmax_test.squeeze()
-        break
-    print 'one batch inference time:', (time.time() - start)/batch_size
+        y_true.append(y.cpu().numpy())
+        y_pred.append(out_test)
+    #     print 'show a batch in test set:'
+    #     print y
+    #     print argmax_test.squeeze()
+    #     break
+    # print 'one batch inference time:', (time.time() - start)/batch_size
     # save the trained model parameters
-    torch.save(model.state_dict(), './saved_model/convlstm__model_1layer_augmented_20190308.pth') # arbitrary file extension
+
+    print y_true
+    print y_pred
+
+    torch.save(model.state_dict(), './saved_model/convlstm__model_1layer_augmented_20190315.pth') # arbitrary file extension
 
 
     print('Input size:', list(x.data.size()))
