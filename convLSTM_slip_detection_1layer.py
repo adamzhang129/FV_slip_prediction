@@ -319,8 +319,8 @@ def _main():
     # print 'one batch inference time:', (time.time() - start)/batch_size
     # save the trained model parameters
 
-    print y_true
-    print y_pred
+    print np.array(y_true).shape
+    print np.array(y_pred).shape
 
     torch.save(model.state_dict(), './saved_model/convlstm__model_1layer_augmented_20190315.pth') # arbitrary file extension
 
