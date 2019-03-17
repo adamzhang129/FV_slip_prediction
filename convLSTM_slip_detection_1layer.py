@@ -85,7 +85,66 @@ class ConvLSTMCell(nn.Module):
         return out,  (hidden, cell)
 
 
+import time
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix
+from sklearn.utils.multiclass import unique_labels
+import matplotlib.pyplot as plt
 
+import IPython
+
+def plot_confusion_matrix(y_true, y_pred, classes,
+                          normalize=False,
+                          title=None,
+                          cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    if not title:
+        if normalize:
+            title = 'Normalized confusion matrix'
+        else:
+            title = 'Confusion matrix, without normalization'
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    # IPython.embed()
+    # Only use the labels that appear in the data
+    # classes = classes[unique_labels(y_true, y_pred)]
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
+    ax.figure.colorbar(im, ax=ax)
+    # We want to show all ticks...
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           # ... and label them with the respective list entries
+           xticklabels=classes, yticklabels=classes,
+           title=title,
+           ylabel='True label',
+           xlabel='Predicted label')
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor")
+
+    # Loop over data dimensions and create text annotations.
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], fmt),
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+    return ax
 
 
 
@@ -95,8 +154,8 @@ from torch.utils.data import DataLoader
 
 from torch.utils.data.dataset import random_split
 
-from logger import Logger
-logger = Logger('./logs')
+# from logger import Logger
+# logger = Logger('./logs')
 def _main():
     """
     Run some basic tests on the API
@@ -266,17 +325,17 @@ def _main():
                 print ('[ TEST set] Epoch {}, Step {}, Loss: {:.6f}, Acc: {:.4f}'
                        .format(epoch, step + 1, test_loss_reduced, test_accuracy))
                 # 1. Log scalar values (scalar summary)
-                info = {'loss': loss_train_reduced, 'accuracy': train_accuracy,
-                        'test_loss': test_loss_reduced, 'test_accuracy': test_accuracy}
-
-                for tag, value in info.items():
-                    logger.scalar_summary(tag, value, epoch*(train_size/batch_size) + (step + 1))
-
-                # 2. Log values and gradients of the parameters (histogram summary)
-                for tag, value in model.named_parameters():
-                    tag = tag.replace('.', '/')
-                    logger.histo_summary(tag, value.data.cpu().numpy(), epoch*(train_size/batch_size) + (step + 1))
-                    logger.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), epoch*(train_size/batch_size) + (step + 1))
+                # info = {'loss': loss_train_reduced, 'accuracy': train_accuracy,
+                #         'test_loss': test_loss_reduced, 'test_accuracy': test_accuracy}
+                #
+                # for tag, value in info.items():
+                #     logger.scalar_summary(tag, value, epoch*(train_size/batch_size) + (step + 1))
+                #
+                # # 2. Log values and gradients of the parameters (histogram summary)
+                # for tag, value in model.named_parameters():
+                #     tag = tag.replace('.', '/')
+                #     logger.histo_summary(tag, value.data.cpu().numpy(), epoch*(train_size/batch_size) + (step + 1))
+                #     logger.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), epoch*(train_size/batch_size) + (step + 1))
 
                 # 3. Log training images (image summary)
                 # info = {'images': images.view(-1, 28, 28)[:10].cpu().numpy()}
@@ -285,7 +344,7 @@ def _main():
                 #     logger.image_summary(tag, images, step + 1)
 
 
-    import time
+
 
 
     start = time.time()
@@ -311,23 +370,40 @@ def _main():
         _, argmax_test = torch.max(out_test, 1)
 
         y_true.append(y.cpu().numpy())
-        y_pred.append(out_test)
+        y_pred.append(argmax_test.cpu().numpy())
     #     print 'show a batch in test set:'
     #     print y
     #     print argmax_test.squeeze()
     #     break
     # print 'one batch inference time:', (time.time() - start)/batch_size
     # save the trained model parameters
+    y_true = np.array(y_true).astype(int)
+    y_true = np.ravel(y_true)
+    y_pred = np.ravel(np.array(y_pred))
 
-    print np.array(y_true).shape
-    print np.array(y_pred).shape
+    print np.array(y_true)
+    print np.array(y_pred)
 
     torch.save(model.state_dict(), './saved_model/convlstm__model_1layer_augmented_20190315.pth') # arbitrary file extension
 
+    ## calculate metric scores
+    precision, recall, f1_score, support = precision_recall_fscore_support(y_true, y_pred)
+    accuracy = accuracy_score(y_true, y_pred)
 
-    print('Input size:', list(x.data.size()))
-    print('Target size:', list(y.data.size()))
-    print('Last hidden state size:', list(state[0].size()))
+    print '------------------------------------'
+    print 'accuracy: {}'.format(accuracy)
+    print 'precision: {}'.format(precision)
+    print 'recall: {}'.format(recall)
+    print 'f1_score: {}'.format(f1_score)
+    print 'support: {}'.format(support)
+
+    # Plot normalized confusion matrix
+    class_names = ['slip', 'nonslip']
+    plot_confusion_matrix(y_true, y_pred, classes=class_names, normalize=True,
+                          title='Normalized confusion matrix')
+    plt.show()
+
+    
 
 
 if __name__ == '__main__':
