@@ -40,8 +40,8 @@
       <file leaf-file-name="convLSTM_slip_detection_1layer.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/convLSTM_slip_detection_1layer.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="365">
-              <caret line="399" column="4" lean-forward="false" selection-start-line="399" selection-start-column="4" selection-end-line="399" selection-end-column="4" />
+            <state relative-caret-position="5506">
+              <caret line="395" column="53" lean-forward="false" selection-start-line="395" selection-start-column="53" selection-end-line="395" selection-end-column="53" />
               <folding>
                 <element signature="e#0#12#0" expanded="true" />
               </folding>
@@ -62,10 +62,10 @@
     </option>
   </component>
   <component name="ProjectFrameBounds" extendedState="6">
-    <option name="x" value="64" />
-    <option name="y" value="-11" />
-    <option name="width" value="1857" />
-    <option name="height" value="1092" />
+    <option name="x" value="1985" />
+    <option name="y" value="-4" />
+    <option name="width" value="1855" />
+    <option name="height" value="1084" />
   </component>
   <component name="ProjectView">
     <navigator currentView="ProjectPane" proportions="" version="1">
@@ -198,7 +198,7 @@
     <servers />
   </component>
   <component name="ToolWindowManager">
-    <frame x="64" y="-11" width="1857" height="1092" extended-state="6" />
+    <frame x="1985" y="-4" width="1855" height="1084" extended-state="6" />
     <editor active="true" />
     <layout>
       <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
@@ -250,8 +250,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/convLSTM_slip_detection_1layer.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="365">
-          <caret line="399" column="4" lean-forward="false" selection-start-line="399" selection-start-column="4" selection-end-line="399" selection-end-column="4" />
+        <state relative-caret-position="5506">
+          <caret line="395" column="53" lean-forward="false" selection-start-line="395" selection-start-column="53" selection-end-line="395" selection-end-column="53" />
           <folding>
             <element signature="e#0#12#0" expanded="true" />
           </folding>
