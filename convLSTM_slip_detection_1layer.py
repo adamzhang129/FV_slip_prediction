@@ -90,6 +90,8 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score, con
 from sklearn.utils.multiclass import unique_labels
 import matplotlib.pyplot as plt
 
+import IPython
+
 def plot_confusion_matrix(y_true, y_pred, classes,
                           normalize=False,
                           title=None,
@@ -106,8 +108,9 @@ def plot_confusion_matrix(y_true, y_pred, classes,
 
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
+    # IPython.embed()
     # Only use the labels that appear in the data
-    classes = classes[unique_labels(y_true, y_pred)]
+    # classes = classes[unique_labels(y_true, y_pred)]
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         print("Normalized confusion matrix")
@@ -151,8 +154,8 @@ from torch.utils.data import DataLoader
 
 from torch.utils.data.dataset import random_split
 
-from logger import Logger
-logger = Logger('./logs')
+# from logger import Logger
+# logger = Logger('./logs')
 def _main():
     """
     Run some basic tests on the API
@@ -322,17 +325,17 @@ def _main():
                 print ('[ TEST set] Epoch {}, Step {}, Loss: {:.6f}, Acc: {:.4f}'
                        .format(epoch, step + 1, test_loss_reduced, test_accuracy))
                 # 1. Log scalar values (scalar summary)
-                info = {'loss': loss_train_reduced, 'accuracy': train_accuracy,
-                        'test_loss': test_loss_reduced, 'test_accuracy': test_accuracy}
-
-                for tag, value in info.items():
-                    logger.scalar_summary(tag, value, epoch*(train_size/batch_size) + (step + 1))
-
-                # 2. Log values and gradients of the parameters (histogram summary)
-                for tag, value in model.named_parameters():
-                    tag = tag.replace('.', '/')
-                    logger.histo_summary(tag, value.data.cpu().numpy(), epoch*(train_size/batch_size) + (step + 1))
-                    logger.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), epoch*(train_size/batch_size) + (step + 1))
+                # info = {'loss': loss_train_reduced, 'accuracy': train_accuracy,
+                #         'test_loss': test_loss_reduced, 'test_accuracy': test_accuracy}
+                #
+                # for tag, value in info.items():
+                #     logger.scalar_summary(tag, value, epoch*(train_size/batch_size) + (step + 1))
+                #
+                # # 2. Log values and gradients of the parameters (histogram summary)
+                # for tag, value in model.named_parameters():
+                #     tag = tag.replace('.', '/')
+                #     logger.histo_summary(tag, value.data.cpu().numpy(), epoch*(train_size/batch_size) + (step + 1))
+                #     logger.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), epoch*(train_size/batch_size) + (step + 1))
 
                 # 3. Log training images (image summary)
                 # info = {'images': images.view(-1, 28, 28)[:10].cpu().numpy()}
@@ -367,16 +370,19 @@ def _main():
         _, argmax_test = torch.max(out_test, 1)
 
         y_true.append(y.cpu().numpy())
-        y_pred.append(out_test)
+        y_pred.append(argmax_test.cpu().numpy())
     #     print 'show a batch in test set:'
     #     print y
     #     print argmax_test.squeeze()
     #     break
     # print 'one batch inference time:', (time.time() - start)/batch_size
     # save the trained model parameters
+    y_true = np.array(y_true).astype(int)
+    y_true = np.ravel(y_true)
+    y_pred = np.ravel(np.array(y_pred))
 
-    print np.array(y_true).shape
-    print np.array(y_pred).shape
+    print np.array(y_true)
+    print np.array(y_pred)
 
     torch.save(model.state_dict(), './saved_model/convlstm__model_1layer_augmented_20190315.pth') # arbitrary file extension
 
