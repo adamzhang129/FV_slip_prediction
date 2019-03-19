@@ -366,7 +366,7 @@ def _main():
         print mu, sigma
         # IPython.embed()
         for n in range(0, len(mu)):
-            metric_table[n_frames_ahead-1, n] = '{:06.4f}+/-{}'.format(mu[n], sigma[n])
+            metric_table[n_frames_ahead-1, n] = '{:06.4f}+/-{:06.4f}'.format(mu[n], sigma[n])
 
         loss_test_reduced = loss_test / len(test_sampler)
         print ('        [TEST set] Average Loss (over all set): {:.6f}'
@@ -382,7 +382,7 @@ def _main():
         # show_two_img(gt, out_single)
 
     #=======save metric results to file===========
-    print metric_table
+    # print metric_table
     n_frames_ahead = range(1, 6)
     N = max_frames_ahead
     index = list(map(str, n_frames_ahead))
@@ -396,6 +396,7 @@ def _main():
 
     df = pd.DataFrame(metric_table, index=index, columns=column)
     df.to_csv('metric results.csv')
+    print df
 
     # ==============================================
     # plot loss vs n_frames_ahead
