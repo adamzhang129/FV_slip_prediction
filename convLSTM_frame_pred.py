@@ -163,18 +163,27 @@ from skimage.measure import compare_ssim
 def image_similarity_metrics(img1, img2, channel_first=False):
     # ========MSE===================
     shape = img1.shape
-    if not channel_first:
-        numel = shape[0] * shape[1]
-    else:
-        numel = shape[-2] * shape[-1]
-    print numel
-    l2 = np.linalg.norm((img1 - img2)) ** 2 / numel
-    # ========L1====================
-    l1 = np.linalg.norm((img1 - img2), ord=1) / numel
-    # =======SSIM===================
-    ssim = compare_ssim(img1, img2, data_range=img2.max() - img2.min())
+    if len(shape) == 4:
+        B = shape[0]  # batch_size
+    numel = shape[-3] * shape[-2] * shape[-1]
 
-    return np.array([l1, l2, ssim])
+    output_matrix = []
+    for ind_B in range(0, B):
+        im1 = img1[ind_B]
+        im2 = img2[ind_B]
+        im1 = np.moveaxis(im1, 0, -1)
+        im2 = np.moveaxis(im2, 0, -1)
+
+        # IPython.embed()
+        l2 = np.linalg.norm((im1 - im2)) ** 2 / numel
+        # ========L1====================
+        l1 = np.sum(np.abs(im1 - im2)) / numel
+        # =======SSIM===================
+        ssim = compare_ssim(im1, im2, data_range=img2.max() - img2.min(), multichannel=True)
+
+        output_matrix.append([l1, l2, ssim])
+
+    return np.array(output_matrix)
 
 
 
@@ -188,7 +197,7 @@ def _main():
     batch_size, channels, height, width = 32, 3, 30, 30
     hidden_size = 32 # 64           # hidden state size
     lr = 1e-5     # learning rate
-    max_epoch = 200  # number of epochs
+    max_epoch = 1  # number of epochs
     # n_frames = 8     # sequence length
     #
     #
@@ -201,16 +210,6 @@ def _main():
                                             RandomVerticalFlip(),
                                             ToTensor()])
                                         )
-    # convlstm_dataset = convLSTM_tdiff_Dataset(dataset_dir='../dataset3/resample_skipping',
-    #                                           n_class=2,
-    #                                           transform=transforms.Compose([
-    #                                               ToTensor()])
-    #                                           )
-    # train_ratio = 0.9
-    # train_size = int(train_ratio*len(convlstm_dataset))
-    # test_size = len(convlstm_dataset) - train_size
-    #
-    # train_dataset, test_dataset = random_split(convlstm_dataset, [train_size, test_size])
 
     train_sampler, test_sampler = random_split_customized(convlstm_dataset, train_ratio=0.9)
 
@@ -226,6 +225,9 @@ def _main():
     train_loss_cache = []
     test_loss_cache = []
 
+    max_frames_ahead = 5
+    n_metrics = 3
+    metric_table = np.zeros([max_frames_ahead, max_frames_ahead*n_metrics]).astype(str)
     # train with different values of n_frames_ahead to see the performance
     for n_frames_ahead in range(1, 6):
         n_frames = 10 - n_frames_ahead
@@ -309,9 +311,9 @@ def _main():
                            .format(epoch, step + 1, loss_train_reduced))
 
 
-        model_path = './saved_model/convlstm_frame_predict_20190311_200epochs_3200data_flipped_{}f_ahead.pth'\
-            .format(n_frames_ahead)
-        torch.save(model.state_dict(), model_path)
+        # model_path = './saved_model/convlstm_frame_predict_20190311_200epochs_3200data_flipped_{}f_ahead.pth'\
+        #     .format(n_frames_ahead)
+        # torch.save(model.state_dict(), model_path)
 
         train_loss_cache.append(loss_train_reduced)
 
@@ -351,14 +353,21 @@ def _main():
                     loss += loss_fn(out_test, y[n_frames_ahead - (n_frames - t)])
                     # calculate different metrics
                     n = n_frames_ahead - (n_frames - t)
-                    metric = image_similarity_metrics(out_test, y[n], channel_first=True)
+                    metric = image_similarity_metrics(out_test.cpu().detach().numpy(), y[n].cpu().detach().numpy(), channel_first=True)
                     metric_tmp[test_step*batch_size:(test_step+1)*batch_size, 3*n:3*(n+1)] = metric
 
             loss_test += loss.item() * batch_size / n_frames_ahead
 
         # ---------------------------------
 
-        print metric_tmp
+        # print metric_tmp.shape
+        mu = np.mean(metric_tmp, axis=0)
+        sigma = np.var(metric_tmp, axis=0)
+        print mu, sigma
+        # IPython.embed()
+        for n in range(0, len(mu)):
+            metric_table[n_frames_ahead-1, n] = '{:06.4f}+/-{}'.format(mu[n], sigma[n])
+
         loss_test_reduced = loss_test / len(test_sampler)
         print ('        [TEST set] Average Loss (over all set): {:.6f}'
                .format(loss_test_reduced))
@@ -371,6 +380,8 @@ def _main():
 
         # IPython.embed()
         # show_two_img(gt, out_single)
+
+    print metric_table
 
     # plot loss vs n_frames_ahead
     import matplotlib.pyplot as plt
