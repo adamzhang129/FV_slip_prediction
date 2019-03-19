@@ -156,6 +156,28 @@ def random_split_customized(dataset, train_ratio=0.9, shuffle_dataset=True):
     return train_sampler, test_sampler
 
 
+from skimage import data, img_as_float
+from skimage.measure import compare_ssim
+
+
+def image_similarity_metrics(img1, img2, channel_first=False):
+    # ========MSE===================
+    shape = img1.shape
+    if not channel_first:
+        numel = shape[0] * shape[1]
+    else:
+        numel = shape[-2] * shape[-1]
+    print numel
+    l2 = np.linalg.norm((img1 - img2)) ** 2 / numel
+    # ========L1====================
+    l1 = np.linalg.norm((img1 - img2), ord=1) / numel
+    # =======SSIM===================
+    ssim = compare_ssim(img1, img2, data_range=img2.max() - img2.min())
+
+    return np.array([l1, l2, ssim])
+
+
+
 import time
 
 def _main():
@@ -297,6 +319,9 @@ def _main():
         print '     Starting the evaluation over test set.....'
         model = model.eval()
 
+
+        n_metrics = 3
+        metric_tmp = np.zeros((len(test_sampler), n_frames_ahead*n_metrics))
         start = time.time()
         loss_test = 0
         for test_step, test_sample_batched in enumerate(test_dataloader):
@@ -318,15 +343,22 @@ def _main():
             state_test = None
             out_test = None
 
+
             for t in range(0, n_frames):
                 out_test, state_test = model(x[t], state_test)
                 if t in range(0, n_frames)[-n_frames_ahead:]:
                     # IPython.embed()
                     loss += loss_fn(out_test, y[n_frames_ahead - (n_frames - t)])
+                    # calculate different metrics
+                    n = n_frames_ahead - (n_frames - t)
+                    metric = image_similarity_metrics(out_test, y[n], channel_first=True)
+                    metric_tmp[test_step*batch_size:(test_step+1)*batch_size, 3*n:3*(n+1)] = metric
 
             loss_test += loss.item() * batch_size / n_frames_ahead
 
         # ---------------------------------
+
+        print metric_tmp
         loss_test_reduced = loss_test / len(test_sampler)
         print ('        [TEST set] Average Loss (over all set): {:.6f}'
                .format(loss_test_reduced))
