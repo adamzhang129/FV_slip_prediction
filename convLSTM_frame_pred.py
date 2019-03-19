@@ -381,8 +381,23 @@ def _main():
         # IPython.embed()
         # show_two_img(gt, out_single)
 
+    #=======save metric results to file===========
     print metric_table
+    n_frames_ahead = range(1, 6)
+    N = max_frames_ahead
+    index = list(map(str, n_frames_ahead))
+    array1 = np.repeat(n_frames_ahead, 3)
+    # array1 = np.concatenate((array1, np.repeat(['Ave'], 3)), axis=0)
+    array2 = np.tile(['L1', 'L2', 'SSIM'], N)
+    arrays = np.stack((array1, array2))
 
+    tuples = list(zip(*arrays))
+    column = pd.MultiIndex.from_tuples(tuples, names=['Frame Number', 'Metrics'])
+
+    df = pd.DataFrame(metric_table, index=index, columns=column)
+    df.to_csv('metric results.csv')
+
+    # ==============================================
     # plot loss vs n_frames_ahead
     import matplotlib.pyplot as plt
 
