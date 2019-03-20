@@ -414,26 +414,26 @@ def _main():
 
 
 
-# import cv2
-#
-# def vec_color_encoding(x, y, encoding='hsv'):
-#     if not x.shape == y.shape:
-#         print '2d vector components should have same shapes.'
-#         return None
-#     hsv = np.zeros((x.shape[0], x.shape[1], 3))
-#     hsv[..., 1] = 255
-#
-#     mag, ang = cv2.cartToPolar(x, y)
-#
-#     hsv[...,0] = ang*180/np.pi/2
-#     hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
-#
-#     hsv = np.uint8(hsv)
-#     if encoding == 'hsv':
-#         return hsv
-#     elif encoding == 'rgb':
-#         bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2RGB)
-#         return bgr
+import cv2
+
+def vec_color_encoding(x, y, encoding='hsv'):
+    if not x.shape == y.shape:
+        print '2d vector components should have same shapes.'
+        return None
+    hsv = np.zeros((x.shape[0], x.shape[1], 3))
+    hsv[..., 1] = 255
+
+    mag, ang = cv2.cartToPolar(x, y)
+
+    hsv[...,0] = ang*180/np.pi/2
+    hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+
+    hsv = np.uint8(hsv)
+    if encoding == 'hsv':
+        return hsv
+    elif encoding == 'rgb':
+        bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2RGB)
+        return bgr
 
 
 def image_prediction_comparison(n_frames_ahead, dataloader):
