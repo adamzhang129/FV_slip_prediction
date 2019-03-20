@@ -216,11 +216,12 @@ def generate_dataloader(path, batch_size):
 
 def construct_metrics_table(values, metrics=['L1', 'L2', 'SSIM']):
     N = len(values)
-    n_frames_ahead = range(1, N)
+    n_frames_ahead = range(1, N+1)
     index = list(map(str, n_frames_ahead))
     array1 = np.repeat(n_frames_ahead, 3)
     # array1 = np.concatenate((array1, np.repeat(['Ave'], 3)), axis=0)
-    array2 = np.tile(metrics, N + 1)
+    array2 = np.tile(metrics, N)
+    # IPython.embed()
 
     arrays = np.stack((array1, array2))
 
@@ -413,26 +414,26 @@ def _main():
 
 
 
-import cv2
-
-def vec_color_encoding(x, y, encoding='hsv'):
-    if not x.shape == y.shape:
-        print '2d vector components should have same shapes.'
-        return None
-    hsv = np.zeros((x.shape[0], x.shape[1], 3))
-    hsv[..., 1] = 255
-
-    mag, ang = cv2.cartToPolar(x, y)
-
-    hsv[...,0] = ang*180/np.pi/2
-    hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
-
-    hsv = np.uint8(hsv)
-    if encoding == 'hsv':
-        return hsv
-    elif encoding == 'rgb':
-        bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2RGB)
-        return bgr
+# import cv2
+#
+# def vec_color_encoding(x, y, encoding='hsv'):
+#     if not x.shape == y.shape:
+#         print '2d vector components should have same shapes.'
+#         return None
+#     hsv = np.zeros((x.shape[0], x.shape[1], 3))
+#     hsv[..., 1] = 255
+#
+#     mag, ang = cv2.cartToPolar(x, y)
+#
+#     hsv[...,0] = ang*180/np.pi/2
+#     hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+#
+#     hsv = np.uint8(hsv)
+#     if encoding == 'hsv':
+#         return hsv
+#     elif encoding == 'rgb':
+#         bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2RGB)
+#         return bgr
 
 
 def image_prediction_comparison(n_frames_ahead, dataloader):
@@ -483,18 +484,23 @@ def image_prediction_comparison(n_frames_ahead, dataloader):
         # ax = axes.ravel()
 
         for n in range(0, n_frames_ahead):
-            img_hat = image_hat[n][i, n]
-            img = y[i, n]
+            # IPython.embed()
+            img_hat = image_hat[n][i].cpu().detach().numpy()
+            img = y[n, i].cpu().detach().numpy()
+
+            img_hat = np.moveaxis(img_hat, 0, 2)
+            img = np.moveaxis(img, 0, 2)
 
             axes[0, n].imshow(img_hat)
             axes[0, n].set_xlabel('prediction of frame {}'.format(n))
             axes[1, n].imshow(img_hat)
             axes[1, n].set_xlabel('ground truth of frame {}'.format(n))
 
+        break
 
-        plt.tight_layout()
-        plt.axis('off')
-        plt.show
+    plt.tight_layout()
+    plt.axis('off')
+    plt.show()
 
 
 
