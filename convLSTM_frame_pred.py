@@ -160,7 +160,9 @@ from skimage import data, img_as_float
 from skimage.measure import compare_ssim
 
 
-def image_similarity_metrics(img1, img2, channel_first=False):
+def image_similarity_metrics(img1, img2):
+
+    # images are with shape of (batch_size, channel, height, width)
     # ========MSE===================
     shape = img1.shape
     if len(shape) == 4:
@@ -185,7 +187,48 @@ def image_similarity_metrics(img1, img2, channel_first=False):
 
     return np.array(output_matrix)
 
+def generate_dataloader(path, batch_size):
+    convlstm_dataset = convLSTM_Dataset(dataset_dir=path,
+                                        n_class=2,
+                                        transform=transforms.Compose([
+                                            RandomHorizontalFlip(),
+                                            RandomVerticalFlip(),
+                                            ToTensor()])
+                                        )
 
+    train_sampler, _ = random_split_customized(convlstm_dataset, train_ratio=0.9)
+
+    train_dataloader = DataLoader(convlstm_dataset, batch_size=batch_size, sampler=train_sampler,
+                                  num_workers=4)
+
+    # test set loaded without augmentation
+    convlstm_dataset_wo_flip = convLSTM_Dataset(dataset_dir=path,
+                                        n_class=2,
+                                        transform=transforms.Compose([
+                                            ToTensor()])
+                                        )
+
+    _, test_sampler = random_split_customized(convlstm_dataset_wo_flip, train_ratio=0.9)
+    test_dataloader = DataLoader(convlstm_dataset, batch_size=batch_size, sampler=test_sampler,
+                                 num_workers=4)
+
+    return train_sampler, test_sampler, train_dataloader, test_dataloader
+
+def construct_metrics_table(values, metrics=['L1', 'L2', 'SSIM']):
+    N = len(values)
+    n_frames_ahead = range(1, N)
+    index = list(map(str, n_frames_ahead))
+    array1 = np.repeat(n_frames_ahead, 3)
+    # array1 = np.concatenate((array1, np.repeat(['Ave'], 3)), axis=0)
+    array2 = np.tile(metrics, N + 1)
+
+    arrays = np.stack((array1, array2))
+
+    tuples = list(zip(*arrays))
+    column = pd.MultiIndex.from_tuples(tuples, names=['Future Frame Number', 'Metrics'])
+
+    df = pd.DataFrame(values, index=index, columns=column)
+    df.to_csv('metric results.csv')
 
 import time
 
@@ -198,29 +241,9 @@ def _main():
     hidden_size = 32 # 64           # hidden state size
     lr = 1e-5     # learning rate
     max_epoch = 1  # number of epochs
-    # n_frames = 8     # sequence length
-    #
-    #
-    # n_frames_ahead = 10 - n_frames
 
-    convlstm_dataset = convLSTM_Dataset(dataset_dir='../dataset/resample_skipping',
-                                        n_class=2,
-                                        transform=transforms.Compose([
-                                            RandomHorizontalFlip(),
-                                            RandomVerticalFlip(),
-                                            ToTensor()])
-                                        )
-
-    train_sampler, test_sampler = random_split_customized(convlstm_dataset, train_ratio=0.9)
-
-    train_dataloader = DataLoader(convlstm_dataset, batch_size=batch_size, sampler=train_sampler,
-                                  num_workers=4)
-    test_dataloader = DataLoader(convlstm_dataset, batch_size=batch_size, sampler=test_sampler,
-                                 num_workers=4)
-    # IPython.embed()
-    # set manual seed
-    # torch.manual_seed(0)
-
+    dataset_path = '../dataset/resample_skipping'
+    train_sampler, test_sampler, train_dataloader, test_dataloader = generate_dataloader(dataset_path, batch_size)
 
     train_loss_cache = []
     test_loss_cache = []
@@ -318,7 +341,7 @@ def _main():
         train_loss_cache.append(loss_train_reduced)
 
 
-        print '     Starting the evaluation over test set.....'
+        print '-----Starting the evaluation over the test set.....'
         model = model.eval()
 
 
@@ -353,7 +376,7 @@ def _main():
                     loss += loss_fn(out_test, y[n_frames_ahead - (n_frames - t)])
                     # calculate different metrics
                     n = n_frames_ahead - (n_frames - t)
-                    metric = image_similarity_metrics(out_test.cpu().detach().numpy(), y[n].cpu().detach().numpy(), channel_first=True)
+                    metric = image_similarity_metrics(out_test.cpu().detach().numpy(), y[n].cpu().detach().numpy())
                     metric_tmp[test_step*batch_size:(test_step+1)*batch_size, 3*n:3*(n+1)] = metric
 
             loss_test += loss.item() * batch_size / n_frames_ahead
@@ -369,7 +392,7 @@ def _main():
             metric_table[n_frames_ahead-1, n] = '{:06.4f}+/-{:06.4f}'.format(mu[n], sigma[n])
 
         loss_test_reduced = loss_test / len(test_sampler)
-        print ('        [TEST set] Average Loss (over all set): {:.6f}'
+        print ('-----[TEST set] Average MSELoss (over all set): {:.6f}'
                .format(loss_test_reduced))
 
         gt = y.squeeze()[1][0]
@@ -382,57 +405,98 @@ def _main():
         # show_two_img(gt, out_single)
 
     #=======save metric results to file===========
-    # print metric_table
-    n_frames_ahead = range(1, 6)
-    N = max_frames_ahead
-    index = list(map(str, n_frames_ahead))
-    array1 = np.repeat(n_frames_ahead, 3)
-    # array1 = np.concatenate((array1, np.repeat(['Ave'], 3)), axis=0)
-    array2 = np.tile(['L1', 'L2', 'SSIM'], N)
-    arrays = np.stack((array1, array2))
+    construct_metrics_table(metric_table)
 
-    tuples = list(zip(*arrays))
-    column = pd.MultiIndex.from_tuples(tuples, names=['Frame Number', 'Metrics'])
-
-    df = pd.DataFrame(metric_table, index=index, columns=column)
-    df.to_csv('metric results.csv')
-    print df
-
-    # ==============================================
-    # plot loss vs n_frames_ahead
-    import matplotlib.pyplot as plt
-
-    train_loss_cache = np.array(train_loss_cache)
-    test_loss_cache = np.array(test_loss_cache)
-
-    plt.figure()
-    xaxis = range(1, 6)
-    plt.plot(xaxis, train_loss_cache, 'r')
-    # plt.hold()
-    plt.plot(xaxis, test_loss_cache, 'b')
-    plt.show()
+    # random output a comparison of images
+    image_prediction_comparison(n_frames_ahead=3, dataloader=test_dataloader)
+    IPython.embed()
 
 
-def show_two_img(a, b):
-    # images are of size: 3X30X30
-    plt.figure(figsize=(10, 6))
 
-    for j, x in enumerate([a, b]):
-        pic = x[0]
-        plt.subplot(3, 2, j + 1)
-        # IPython.embed()
-        plt.imshow(pic)
+import cv2
+
+def vec_color_encoding(x, y, encoding='hsv'):
+    if not x.shape == y.shape:
+        print '2d vector components should have same shapes.'
+        return None
+    hsv = np.zeros((x.shape[0], x.shape[1], 3))
+    hsv[..., 1] = 255
+
+    mag, ang = cv2.cartToPolar(x, y)
+
+    hsv[...,0] = ang*180/np.pi/2
+    hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+
+    hsv = np.uint8(hsv)
+    if encoding == 'hsv':
+        return hsv
+    elif encoding == 'rgb':
+        bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2RGB)
+        return bgr
+
+
+def image_prediction_comparison(n_frames_ahead, dataloader):
+    n_frames = 10-n_frames_ahead
+    batch_size, channels, height, width = 32, 3, 30, 30
+    hidden_size = 32
+    print('Instantiating model...')
+    model = ConvLSTMCell(channels, hidden_size, n_frames_ahead)
+    print(repr(model))
+
+    model_path = './saved_model/convlstm_frame_predict_20190311_200epochs_3200data_flipped_{}f_ahead.pth'.format(n_frames_ahead)
+
+    model.load_state_dict(torch.load(model_path))
+
+    if torch.cuda.is_available():
+        model = model.cuda()
+
+    for test_step, test_sample_batched in enumerate(dataloader):
+        loss = 0.
+
+        frames = test_sample_batched['frames']
+        # y = test_sample_batched['target']
+        frames = torch.transpose(frames, 0, 1)
+        # x = x.type(torch.FloatTensor)
+        x = frames[:n_frames]
+        y = frames[n_frames:]
+
+        if torch.cuda.is_available():
+            # print 'sending input and target to GPU'
+            x = x.type(torch.cuda.FloatTensor)
+            y = y.type(torch.cuda.FloatTensor)
+
+        state_test = None
+        out_test = None
+
+        image_hat = []
+        for t in range(0, n_frames):
+            out_test, state_test = model(x[t], state_test)
+            if t in range(0, n_frames)[-n_frames_ahead:]:
+                image_hat.append(out_test)
+
+        # random sample from this mini batch
+        np.random.seed(10)
+        i = np.random.randint(0, batch_size)
+
+        fig, axes = plt.subplots(nrows=2, ncols=n_frames_ahead, figsize=(10, 4),
+                                 sharex=True, sharey=True)
+        # ax = axes.ravel()
+
+        for n in range(0, n_frames_ahead):
+            img_hat = image_hat[n][i, n]
+            img = y[i, n]
+
+            axes[0, n].imshow(img_hat)
+            axes[0, n].set_xlabel('prediction of frame {}'.format(n))
+            axes[1, n].imshow(img_hat)
+            axes[1, n].set_xlabel('ground truth of frame {}'.format(n))
+
+
+        plt.tight_layout()
         plt.axis('off')
-        pic = x[1]
-        plt.subplot(3, 2, 2 + j + 1)
-        plt.imshow(pic)
-        plt.axis('off')
-        pic = x[2]
-        plt.subplot(3, 2, 2 * 2 + j + 1)
-        plt.imshow(pic)
-        plt.axis('off')
+        plt.show
 
-    plt.show()
+
 
 
 
