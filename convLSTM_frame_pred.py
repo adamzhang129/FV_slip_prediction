@@ -60,6 +60,7 @@ class ConvLSTMCell(nn.Module):
 
         # data size is [batch, channel, height, width]
         # print input_.type(), prev_hidden.type()
+        # IPython.embed()
         stacked_inputs = torch.cat((input_, prev_hidden1), 1)  # concat x[t] with h[t-1]
         gates = self.Gates_layer1(stacked_inputs)
 
@@ -187,9 +188,9 @@ def image_similarity_metrics(img1, img2):
 
     return np.array(output_matrix)
 
-def generate_dataloader(path, batch_size):
-    convlstm_dataset = convLSTM_Dataset(dataset_dir=path,
-                                        n_class=2,
+def generate_dataloader(path, batch_size, n_class):
+    convlstm_dataset = convLSTM_Dataset_dxdy(dataset_dir=path,
+                                        n_class=n_class,
                                         transform=transforms.Compose([
                                             RandomHorizontalFlip(),
                                             RandomVerticalFlip(),
@@ -202,12 +203,13 @@ def generate_dataloader(path, batch_size):
                                   num_workers=4)
 
     # test set loaded without augmentation
-    convlstm_dataset_wo_flip = convLSTM_Dataset(dataset_dir=path,
-                                        n_class=2,
+    convlstm_dataset_wo_flip = convLSTM_Dataset_dxdy(dataset_dir=path,
+                                        n_class=n_class,
                                         transform=transforms.Compose([
                                             ToTensor()])
                                         )
 
+    print convlstm_dataset[1]['frames'].shape
     _, test_sampler = random_split_customized(convlstm_dataset_wo_flip, train_ratio=0.9)
     test_dataloader = DataLoader(convlstm_dataset, batch_size=batch_size, sampler=test_sampler,
                                  num_workers=4)
@@ -238,13 +240,13 @@ def _main():
     Run some basic tests on the API
     """
     # define batch_size, channels, height, width
-    batch_size, channels, height, width = 32, 3, 30, 30
+    batch_size, channels, height, width = 32, 2, 30, 30
     hidden_size = 32 # 64           # hidden state size
     lr = 1e-5     # learning rate
-    max_epoch = 1  # number of epochs
+    max_epoch = 400  # number of epochs
 
-    dataset_path = '../dataset/resample_skipping'
-    train_sampler, test_sampler, train_dataloader, test_dataloader = generate_dataloader(dataset_path, batch_size)
+    dataset_path = '../dataset/resample_skipping_stride1'
+    train_sampler, test_sampler, train_dataloader, test_dataloader = generate_dataloader(dataset_path, batch_size, n_class=4)
 
     train_loss_cache = []
     test_loss_cache = []
@@ -254,10 +256,10 @@ def _main():
     metric_table = np.zeros([max_frames_ahead, max_frames_ahead*n_metrics]).astype(str)
     # train with different values of n_frames_ahead to see the performance
     for n_frames_ahead in range(1, 6):
-        n_frames = 10 - n_frames_ahead
+        n_frames = 10 # we fix the input frame size to 10
 
         print '\n =============[Train with n_frames_ahead = {} ================]'.format(n_frames_ahead)
-        print('Instantiate model')
+        print('Instantiate model.............')
         model = ConvLSTMCell(channels, hidden_size, n_frames_ahead)
         print(repr(model))
 
@@ -269,6 +271,7 @@ def _main():
         x = Variable(torch.rand(n_frames, batch_size, channels, height, width))
         # y = Variable(torch.randn(T, b, d, h, w))
         y = Variable(torch.rand(batch_size))
+        # IPython.embed()
 
         print('Create a MSE criterion')
         loss_fn = nn.MSELoss()
@@ -293,7 +296,7 @@ def _main():
                 frames = torch.transpose(frames, 0, 1)
 
                 x = frames[:n_frames]
-                y = frames[n_frames:]
+                y = frames[n_frames:n_frames+n_frames_ahead]
                 # IPython.embed()
                 # x = x.type(torch.FloatTensor)
                 # print x.size()
@@ -335,9 +338,8 @@ def _main():
                            .format(epoch, step + 1, loss_train_reduced))
 
 
-        # model_path = './saved_model/convlstm_frame_predict_20190311_200epochs_3200data_flipped_{}f_ahead.pth'\
-        #     .format(n_frames_ahead)
-        # torch.save(model.state_dict(), model_path)
+        model_path = './saved_model/convlstm_frame_predict_20190415_400epochs_4000data_flipped_{}f_ahead.pth'.format(n_frames_ahead)
+        torch.save(model.state_dict(), model_path)
 
         train_loss_cache.append(loss_train_reduced)
 
@@ -437,14 +439,14 @@ def vec_color_encoding(x, y, encoding='hsv'):
 
 
 def image_prediction_comparison(n_frames_ahead, dataloader):
-    n_frames = 10-n_frames_ahead
-    batch_size, channels, height, width = 32, 3, 30, 30
+    n_frames = 10
+    batch_size, channels, height, width = 32, 2, 30, 30
     hidden_size = 32
     print('Instantiating model...')
     model = ConvLSTMCell(channels, hidden_size, n_frames_ahead)
     print(repr(model))
 
-    model_path = './saved_model/convlstm_frame_predict_20190311_200epochs_3200data_flipped_{}f_ahead.pth'.format(n_frames_ahead)
+    model_path = './saved_model/convlstm_frame_predict_20190415_200epochs_4000data_flipped_{}f_ahead.pth'.format(n_frames_ahead)
 
     model.load_state_dict(torch.load(model_path))
 
@@ -491,15 +493,21 @@ def image_prediction_comparison(n_frames_ahead, dataloader):
             img_hat = np.moveaxis(img_hat, 0, 2)
             img = np.moveaxis(img, 0, 2)
 
-            axes[0, n].imshow(img_hat)
-            axes[0, n].set_xlabel('prediction of frame {}'.format(n))
-            axes[1, n].imshow(img_hat)
-            axes[1, n].set_xlabel('ground truth of frame {}'.format(n))
+            # IPython.embed()
+            img_hat_encoded = vec_color_encoding(img_hat[:, :, 0], img_hat[:, :, 1],encoding='rgb')
+            img_encoded = vec_color_encoding(img[:, :, 0], img[:, :, 1],encoding='rgb')
+            axes[0, n].imshow(img_hat_encoded)
+            axes[0, n].set_title('prediction of frame {}'.format(n))
+            axes[0, n].axis('off')
+            axes[1, n].imshow(img_encoded)
+            axes[1, n].set_title('ground truth of frame {}'.format(n))
+            axes[1, n].axis('off')
+
 
         break
 
     plt.tight_layout()
-    plt.axis('off')
+
     plt.show()
 
 

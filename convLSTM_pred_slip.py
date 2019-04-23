@@ -18,20 +18,24 @@ import IPython
 
 class ConvLSTMChained(nn.Module):
 
-    def __init__(self, n_frames_ahead=2, n_frames=10):
+    def __init__(self, n_frames_ahead=2, n_frames=11):
         super(ConvLSTMChained, self).__init__()
         self.n_frames_ahead = n_frames_ahead
         self.n_frames = n_frames
-
-        self.pred_net = convLSTMPred(3, 32, self.n_frames_ahead)
-        self.detect_net = convLSTMDetect(3, 64)
+        self.channels = 2
+        self.pred_net = convLSTMPred(self.channels, 32, self.n_frames_ahead)
+        self.detect_net = convLSTMDetect(self.channels, 64, n_class=4)
 
         self.output_list = {'pred': [], 'detect': []}
 
     def forward(self, t, input, prev): # prev defined as a dict
         prev_p = prev['pred']
         prev_d = prev['detect']
-        if t < self.n_frames - self.n_frames_ahead:
+        if t < self.n_frames_ahead - 1:
+            out_p, prev_p = self.pred_net(input, prev_p)
+            prev = {'pred': prev_p, 'detect': prev_d}
+            out_d = None
+        elif t < self.n_frames - 1:
             # print '[INFO] forwarding: time frame {}'.format(t)
             out_p, prev_p = self.pred_net(input, prev_p)
             out_d, prev_d = self.detect_net(input, prev_d)
@@ -45,7 +49,7 @@ class ConvLSTMChained(nn.Module):
 
         else:
 
-            out_d, prev_d = self.detect_net(self.output_list['pred'][t - self.n_frames_ahead], prev_d)
+            out_d, prev_d = self.detect_net(self.output_list['pred'][self.n_frames_ahead - (t-(self.n_frames-1))], prev_d)
             prev['detect'] = prev_d
             self.output_list['detect'].append(out_d)
 
@@ -75,20 +79,35 @@ def load_state_dict(model, path_list):
 
 
 
+def show_model_size(model, input_size):
+    # Estimate Size
+    from pytorch_modelsize.pytorch_modelsize import SizeEstimator
+
+    se = SizeEstimator(model, input_size=input_size)
+    print(se.estimate_size())
+
+    # Returns
+    # (size in megabytes, size in bits)
+    # (408.2833251953125, 3424928768)
+
+    print(se.param_bits)  # bits taken up by parameters
+    print(se.forward_backward_bits)  # bits stored for forward and backward
+    print(se.input_bits)  # bits for input
+
 def _main():
     """
     Run some basic tests on the API
     """
 
     # define batch_size, channels, height, width
-    batch_size, channels, height, width = 32, 3, 30, 30
+    batch_size, channels, height, width = 64, 2, 30, 30
     hidden_size = 64 # 64           # hidden state size
     lr = 1e-5     # learning rate
-    n_frames = 10           # sequence length
+    n_frames = 11           # sequence length
     max_epoch = 30  # number of epochs
 
-    convlstm_dataset = convLSTM_Dataset(dataset_dir='../dataset/resample_skipping',
-                                        n_class=2,
+    convlstm_dataset = convLSTM_Dataset_dxdy(dataset_dir='../dataset/resample_skipping_stride1',
+                                        n_class=4,
                                         transform=transforms.Compose([
                                             RandomHorizontalFlip(),
                                             RandomVerticalFlip(),
@@ -107,14 +126,14 @@ def _main():
     test_size = len(test_sampler)
     for n_frames_ahead in range(1, 6):
         print('Instantiating model.............')
-        model = ConvLSTMChained(n_frames_ahead=n_frames_ahead, n_frames=10)
+        model = ConvLSTMChained(n_frames_ahead=n_frames_ahead, n_frames=n_frames)
         print(repr(model))
 
         # print model.state_dict()
 
         # load pretrained_model_diction
-        path_pred = './saved_model/convlstm_frame_predict_20190311_200epochs_3200data_flipped_{}f_ahead.pth'.format(n_frames_ahead)
-        path_detect = './saved_model/convlstm__model_1layer_augmented_20190308.pth'
+        path_pred = './saved_model/convlstm_frame_predict_20190415_400epochs_4000data_flipped_{}f_ahead.pth'.format(n_frames_ahead)
+        path_detect = './saved_model/convlstm__model_1layer_augmented_11frames_400epochs_20190415.pth'
 
         path_dict = {'pred_net': path_pred, 'detect_net': path_detect}
 
@@ -149,6 +168,9 @@ def _main():
 
         start = time.time()
         for test_step, test_sample_batched in enumerate(test_dataloader):
+
+            start = time.time()
+
             model.output_list = {'pred': [], 'detect': []}
 
             x = test_sample_batched['frames']
@@ -175,6 +197,7 @@ def _main():
             # print y
             n_right += sum(y == argmax_test.squeeze()).item()
 
+            # print '[TIME] the forward time: {}'.format(time.time() - start)
             # print n_right
         test_loss_reduced = test_loss / test_size
         test_accuracy = float(n_right) / test_size

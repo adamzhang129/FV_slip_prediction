@@ -13,6 +13,8 @@ import glob
 
 from torch.utils.data import DataLoader
 
+
+#  The pytorch dataset obj for binary target dataset
 class convLSTM_Dataset(Dataset):
     def __init__(self, dataset_dir, n_class, transform=None):
         """
@@ -188,6 +190,92 @@ class convLSTM_tdiff_Dataset(Dataset):
 
         return sample
 
+import IPython
+
+
+class convLSTM_Dataset_dxdy(Dataset):
+    def __init__(self, dataset_dir, n_class, transform=None):
+        """
+            Args:
+                csv_file (string): Path to the csv file with force torque values and position of pressing.
+                init_img_path (string): path to the  init image
+                imgs_path (string): path to the image when pressing
+                transform (callable, optional): Optional transform to be applied
+                on a sample.
+        """
+        self.dataset_dir = dataset_dir
+        self.n_feature = n_class
+
+        self.transform = transform
+
+        self.class_files = {}
+        for cl in range(0, n_class):
+            self.class_files.update({ str(cl): glob.glob(os.path.join(self.dataset_dir, str(cl), '*')) })
+        # IPython.embed()
+
+        self.Nx, self.Ny = 30, 30
+
+        self.length_cummu = []
+        self.length_cummu.append(len(self.class_files[str(0)]))
+        for cl in range(1, self.n_feature):
+            self.length_cummu.append(len(self.class_files[str(0)]) + self.length_cummu[cl-1])
+        # print self.length_cummu
+
+
+    def __len__(self):
+
+        return self.length_cummu[-1]
+
+    def __getitem__(self, idx):
+        # check if the idx is valid
+        # print self.length_cummu[-1]
+        if idx < 0:
+            print('Please provide positive integers.')
+            return
+        if idx >= self.length_cummu[-1]:
+            print('The retrieving index is over the size of dataset.')
+            return
+
+        feature_size = self.Nx * self.Ny
+
+        for cl in range(0, self.n_feature):
+            if cl == 0:
+                last_length = 0
+            else:
+                last_length = self.length_cummu[cl-1]
+
+            if idx < self.length_cummu[cl]:
+                target = int(cl)
+                # print self.class_files[str(cl)][int(idx - last_length)]
+                frames = pd.read_csv(self.class_files[str(cl)][int(idx - last_length)])
+                break
+
+        data = frames.values
+
+        # print 'data size'+str(data.shape)
+
+        # form a tensor (T, c, H, W)
+        frame_matrix = np.zeros((data.shape[1], 2, self.Nx, self.Ny))
+        for i in range(0, data.shape[1]):
+            dx_interp = data[:feature_size, i]
+            dy_interp = data[feature_size:, i]
+            #         print dx_interp.shape, dy_interp.shape
+
+            dx_resized = dx_interp.reshape(self.Nx, self.Ny)
+            dy_resized = dy_interp.reshape(self.Nx, self.Ny)
+
+            # stack them along axis 0
+            frame_matrix[i,:,:,:] = np.stack([dx_resized, dy_resized], axis=0)
+
+        # frame_matrix = np.flip(frame_matrix, axis=0)
+
+        sample = {'frames': frame_matrix, 'target': target}
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample
+
 
 class RandomHorizontalFlip(object):
     """Randomly flip the numpy array(as image) horizontally
@@ -289,29 +377,39 @@ class ToTensor(object):
 
 
 if __name__ == '__main__':
-    convlstm_dataset = convLSTM_Dataset(dataset_dir='../dataset/resample_skipping',
-                                  n_class=2,
-                                transform=transforms.Compose([
-                                   ToTensor()])
-                           )
+    convlstm_dataset = convLSTM_Dataset_dxdy(dataset_dir='../dataset/resample_skipping_stride1',
+                                                n_class=4,
+                                                transform=transforms.Compose([
+                                                            RandomHorizontalFlip(),
+                                                            RandomVerticalFlip(),
+                                                            ToTensor()])
+                                            )
 
-    dataloader = DataLoader(convlstm_dataset, batch_size=8, shuffle=True, num_workers=4)
-    print(len(convlstm_dataset))
+    conv = convlstm_dataset[100]['frames'].shape
+    print conv
+    print len(convlstm_dataset)
+
+    # print conv['frames']
+    #
+    #
+    #
+    # dataloader = DataLoader(convlstm_dataset, batch_size=8, shuffle=True, num_workers=4)
+    # print(len(convlstm_dataset))
 
     # sample = convlstm_dataset[100]
     # print sample['frames']
 
     #=====================================
-    convlstm_tdiff_dataset = convLSTM_tdiff_Dataset(dataset_dir='../dataset/resample_skipping',
-                                                    n_class=2,
-                                                    transform=transforms.Compose([
-                                                        RandomHorizontalFlip(),
-                                                        RandomVerticalFlip(),
-                                                        ToTensor()])
-                                                    )
-    dataloader_tdiff = DataLoader(convlstm_tdiff_dataset, batch_size=8, shuffle=True, num_workers=4)
-    sample_tdiff = convlstm_tdiff_dataset[100]
-    print sample_tdiff['frames'].shape
+    # convlstm_tdiff_dataset = convLSTM_tdiff_Dataset(dataset_dir='../dataset/resample_skipping',
+    #                                                 n_class=2,
+    #                                                 transform=transforms.Compose([
+    #                                                     RandomHorizontalFlip(),
+    #                                                     RandomVerticalFlip(),
+    #                                                     ToTensor()])
+    #                                                 )
+    # dataloader_tdiff = DataLoader(convlstm_tdiff_dataset, batch_size=8, shuffle=True, num_workers=4)
+    # sample_tdiff = convlstm_tdiff_dataset[100]
+    # print sample_tdiff['frames'].shape
 
 
 
