@@ -15,7 +15,7 @@ class ConvLSTMCell(nn.Module):
     Generate a convolutional LSTM cell
     """
 
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, n_class):
         super(ConvLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -27,7 +27,7 @@ class ConvLSTMCell(nn.Module):
         self.height, self.width = 30, 30
         self.linear1 = nn.Linear(self.hidden_size*self.height*self.width, 256)
         self.dropout = nn.Dropout(0.5)
-        self.linear2 = nn.Linear(256, 2)
+        self.linear2 = nn.Linear(256, n_class)
 
 
         # self.softmax = nn.Softmax()
@@ -162,14 +162,16 @@ def _main():
     """
 
     # define batch_size, channels, height, width
-    batch_size, channels, height, width = 32, 3, 30, 30
+    batch_size, channels, height, width = 64, 2, 30, 30
+    n_class = 4
     hidden_size = 64 # 64           # hidden state size
     lr = 1e-5     # learning rate
-    n_frames = 10           # sequence length
-    max_epoch = 1  # number of epochs
+    n_frames = 11           # sequence length
+    N_dataset_frames = 15
+    max_epoch = 400  # number of epochs
 
-    convlstm_dataset = convLSTM_Dataset(dataset_dir='../dataset/resample_skipping',
-                                        n_class=2,
+    convlstm_dataset = convLSTM_Dataset_dxdy(dataset_dir='../dataset/resample_skipping_stride1',
+                                        n_class=4,
                                         transform=transforms.Compose([
                                             RandomHorizontalFlip(),
                                             RandomVerticalFlip(),
@@ -179,6 +181,9 @@ def _main():
     train_ratio = 0.9
     train_size = int(train_ratio*len(convlstm_dataset))
     test_size = len(convlstm_dataset) - train_size
+
+    print('=== dataset size, train size, test size:===')
+    print len(convlstm_dataset), train_size, test_size
 
     train_dataset, test_dataset = random_split(convlstm_dataset, [train_size, test_size])
 
@@ -192,8 +197,8 @@ def _main():
     # set manual seed
     # torch.manual_seed(0)
 
-    print('Instantiate model')
-    model = ConvLSTMCell(channels, hidden_size)
+    print('Instantiate model................')
+    model = ConvLSTMCell(channels, hidden_size, n_class)
     print(repr(model))
 
     if torch.cuda.is_available():
@@ -234,7 +239,7 @@ def _main():
             out = None
 
 
-            for t in range(0, n_frames):
+            for t in range(N_dataset_frames-n_frames, N_dataset_frames):
                 # print x[t,0,0,:,:]
                 out, state = model(x[t], state)
                 # loss += loss_fn(state[0], y[t])
@@ -265,9 +270,10 @@ def _main():
             # accuracy = (y == argmax.squeeze()).float().mean() # accuracy in each batch
             n_right_train += sum(y == argmax.squeeze()).item()
 
-            if (step + 1) % 50 == 0:
-                loss_train_reduced = loss_train / (50*batch_size)
-                train_accuracy = float(n_right_train) / (50*batch_size)
+            N_step_vis = 20
+            if (step + 1) % N_step_vis == 0:
+                loss_train_reduced = loss_train / (N_step_vis*batch_size)
+                train_accuracy = float(n_right_train) / (N_step_vis*batch_size)
                 loss_train = 0
                 n_right_train = 0
                 print '=================================================================='
@@ -298,7 +304,7 @@ def _main():
                     state_test = None
                     out_test = None
 
-                    for t in range(0, n_frames):
+                    for t in range(N_dataset_frames-n_frames, N_dataset_frames):
                         out_test, state_test = model(x[t], state_test)
                         # loss += loss_fn(state[0], y[t])
 
@@ -364,12 +370,12 @@ def _main():
         state_test = None
         out_test = None
 
-        for t in range(0, n_frames):
+        for t in range(N_dataset_frames-n_frames, N_dataset_frames):
             out_test,  state_test = model(x[t], state_test)
 
         _, argmax_test = torch.max(out_test, 1)
 
-        y_true.append(y.cpu().numpy())
+        y_true.append(y.cpu().numpy().astype(int))
         y_pred.append(argmax_test.cpu().numpy())
     #     print 'show a batch in test set:'
     #     print y
@@ -377,14 +383,16 @@ def _main():
     #     break
     # print 'one batch inference time:', (time.time() - start)/batch_size
     # save the trained model parameters
-    y_true = np.array(y_true).astype(int)
-    y_true = np.ravel(y_true)
-    y_pred = np.ravel(np.array(y_pred))
+    # print y_true
+    # IPython.embed()
+    y_true = np.concatenate((np.ravel(np.array(y_true[:-1])), np.array(y_true[-1])), axis=0)
+    y_pred = np.concatenate((np.ravel(np.array(y_pred[:-1])), np.array(y_pred[-1])), axis=0)
+    # IPython.embed()
 
     print np.array(y_true)
     print np.array(y_pred)
 
-    torch.save(model.state_dict(), './saved_model/convlstm__model_1layer_augmented_20190315.pth') # arbitrary file extension
+    torch.save(model.state_dict(), './saved_model/convlstm__model_1layer_augmented_11frames_400epochs_20190415.pth') # arbitrary file extension
 
     ## calculate metric scores
     precision, recall, f1_score, support = precision_recall_fscore_support(y_true, y_pred)
@@ -398,7 +406,7 @@ def _main():
     print 'support: {}'.format(support)
 
     # Plot normalized confusion matrix
-    class_names = ['slip', 'nonslip']
+    class_names = ['trans slip', 'rot slip', 'rolling', 'stable']
     plot_confusion_matrix(y_true, y_pred, classes=class_names, normalize=True,
                           title='Normalized confusion matrix')
     plt.show()
