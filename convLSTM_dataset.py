@@ -277,6 +277,77 @@ class convLSTM_Dataset_dxdy(Dataset):
         return sample
 
 
+class LSTM_Dataset(Dataset):
+    def __init__(self, dataset_dir, n_class, transform=None):
+        """
+            Args:
+                csv_file (string): Path to the csv file with force torque values and position of pressing.
+                init_img_path (string): path to the  init image
+                imgs_path (string): path to the image when pressing
+                transform (callable, optional): Optional transform to be applied
+                on a sample.
+        """
+        self.dataset_dir = dataset_dir
+        self.n_feature = n_class
+
+        self.transform = transform
+
+        self.class_files = {}
+        for cl in range(0, n_class):
+            self.class_files.update({str(cl): glob.glob(os.path.join(self.dataset_dir, str(cl), '*'))})
+        # IPython.embed()
+
+        self.Nx, self.Ny = 30, 30
+
+        self.length_cummu = []
+        self.length_cummu.append(len(self.class_files[str(0)]))
+        for cl in range(1, self.n_feature):
+            self.length_cummu.append(len(self.class_files[str(0)]) + self.length_cummu[cl-1])
+        # print self.length_cummu
+
+    def __len__(self):
+
+        return self.length_cummu[-1]
+
+    def __getitem__(self, idx):
+        # check if the idx is valid
+        # print self.length_cummu[-1]
+        if idx < 0:
+            print('Please provide positive integers.')
+            return
+        if idx >= self.length_cummu[-1]:
+            print('The retrieving index is over the size of dataset.')
+            return
+
+        # feature_size = self.Nx * self.Ny
+
+        for cl in range(0, self.n_feature):
+            if cl == 0:
+                last_length = 0
+            else:
+                last_length = self.length_cummu[cl-1]
+
+            if idx < self.length_cummu[cl]:
+                target = int(cl)
+                # print self.class_files[str(cl)][int(idx - last_length)]
+                frames = pd.read_csv(self.class_files[str(cl)][int(idx - last_length)])
+                break
+
+        data = frames.values
+
+        # print 'data size'+str(data.shape)
+
+        # form a tensor (T, 2*feature_size) here the shape should be (15, 1800)
+        frame_matrix = data.transpose()
+
+        sample = {'frames': frame_matrix, 'target': target}
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample
+
+
 class RandomHorizontalFlip(object):
     """Randomly flip the numpy array(as image) horizontally
     This transform should be put before ToTensor()
@@ -388,6 +459,16 @@ if __name__ == '__main__':
     conv = convlstm_dataset[100]['frames'].shape
     print conv
     print len(convlstm_dataset)
+
+    lstm_dataset = LSTM_Dataset(dataset_dir='../dataset/resample_skipping_stride1',
+                                n_class=4,
+                                transform=transforms.Compose([
+                                                            ToTensor()])
+                                )
+
+    lstm = lstm_dataset[100]['frames'].shape
+    print lstm, len(lstm_dataset)
+
 
     # print conv['frames']
     #
