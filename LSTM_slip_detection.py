@@ -30,10 +30,10 @@ class LSTMCell(nn.Module):
 
         self.n_frames = n_frames
 
-    def forward(self, input_, hc):
+    def forward(self, input_, hc, out_bool):
 
         # get batch and spatial sizes
-        batch_size = input_.data.size()[1]
+        batch_size = input_.data.size()[0]
 
         # generate empty prev_state, if None is provided
         if hc is None:
@@ -44,18 +44,20 @@ class LSTMCell(nn.Module):
             )  # list of h[t-1] and C[t-1]: both of size [batch_size, hidden_size, D, D]
 
         # data size is [batch, channel, height, width]
-        for t in range(0, self.n_frames):
-            hc = self.lstm(input_[t], hc)
+
+        hc = self.lstm(input_, hc)
 
         h, c = hc
         # print h.size
         # IPython.embed()
-        flat = h.view(-1, h.size()[-1])
-        # print flat.size()
-        out = self.linear1(self.dp1(flat))
-        out = self.linear2(self.dp2(out))
+        out = None
+        if out_bool:
+            flat = h.view(-1, h.size()[-1])
+            # print flat.size()
+            out = self.linear1(self.dp1(flat))
+            out = self.linear2(self.dp2(out))
 
-        return out
+        return out, hc
 
 
 import time
@@ -135,13 +137,13 @@ def _main():
     """
 
     # define batch_size, channels, height, width
-    batch_size, feature_size = 4, 1800
+    batch_size, feature_size = 32, 1800
     n_class = 4
     hidden_size = 1024 # 64           # hidden state size
     lr = 1e-5     # learning rate
     n_frames = 11           # sequence length
     N_dataset_frames = 15
-    max_epoch = 1  # number of epochs
+    max_epoch = 50  # number of epochs
 
     lstm_dataset = LSTM_Dataset(dataset_dir='../dataset/resample_skipping_stride1',
                                 n_class=4,
@@ -158,9 +160,9 @@ def _main():
     train_dataset, test_dataset = random_split(lstm_dataset, [train_size, test_size])
 
 
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True, num_workers=4)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True, num_workers=1)
 
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, num_workers=1)
 
     # set manual seed
     # torch.manual_seed(0)
@@ -196,7 +198,7 @@ def _main():
             y = sample_batched['target']
             x = torch.transpose(x, 0, 1)  # transpose time sequence and batch (N, batch, feature_size)
             # x = x.type(torch.FloatTensor)
-            print x.size()
+            # print x.size()
 
             if torch.cuda.is_available():
                 # print 'sending input and target to GPU'
@@ -205,8 +207,10 @@ def _main():
 
             state = None
 
-            input_ = x[N_dataset_frames-n_frames:N_dataset_frames, :, :]
-            out = model(input_, state)
+            for t in range(N_dataset_frames-n_frames, N_dataset_frames):
+                # print x[t,0,0,:,:]
+                out_bool = True if t == N_dataset_frames - 1 else False
+                out, state = model(x[t], state, out_bool)
 
             # out = out.long()
             y = y.long()
@@ -268,8 +272,10 @@ def _main():
 
                     state_test = None
 
-                    input_ = x[N_dataset_frames - n_frames:N_dataset_frames, :, :]
-                    out_test = model(input_, state_test)
+                    for t in range(N_dataset_frames - n_frames, N_dataset_frames):
+                        # print x[t,0,0,:,:]
+                        out_bool = True if t == N_dataset_frames - 1 else False
+                        out_test, state_test = model(x[t], state_test, out_bool)
 
                     # out = out.long()
                     y = y.long()
@@ -333,8 +339,10 @@ def _main():
         state_test = None
         out_test = None
 
-        input_ = x[N_dataset_frames - n_frames:N_dataset_frames, :, :]
-        out_test = model(input_, state_test)
+        for t in range(N_dataset_frames - n_frames, N_dataset_frames):
+            # print x[t,0,0,:,:]
+            out_bool = True if t == N_dataset_frames - 1 else False
+            out_test, state_test = model(x[t], state_test, out_bool)
 
         _, argmax_test = torch.max(out_test, 1)
 
@@ -355,7 +363,7 @@ def _main():
     print np.array(y_true)
     print np.array(y_pred)
 
-    torch.save(model.state_dict(), './saved_model/lstm__model_1layer_11frames_400epochs_20190423.pth') # arbitrary file extension
+    torch.save(model.state_dict(), './saved_model/lstm_model_1layer_11frames_50epochs_20190425.pth') # arbitrary file extension
 
     ## calculate metric scores
     precision, recall, f1_score, support = precision_recall_fscore_support(y_true, y_pred)
@@ -369,9 +377,9 @@ def _main():
     print 'support: {}'.format(support)
 
     # Plot normalized confusion matrix
-    class_names = ['trans slip', 'rot slip', 'rolling', 'stable']
+    class_names = ['Translational slip', 'Rotional slip', 'Rolling', 'Stable']
     plot_confusion_matrix(y_true, y_pred, classes=class_names, normalize=True,
-                          title='Normalized confusion matrix')
+                          title='Normalized Confusion Matrix')
     plt.show()
 
 
