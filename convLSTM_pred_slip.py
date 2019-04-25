@@ -81,10 +81,10 @@ def load_state_dict(model, path_list):
 
 def show_model_size(model, input_size):
     # Estimate Size
-    from pytorch_modelsize.pytorch_modelsize import SizeEstimator
-
-    se = SizeEstimator(model, input_size=input_size)
-    print(se.estimate_size())
+    # from pytorch_modelsize.pytorch_modelsize import SizeEstimator
+    #
+    # se = SizeEstimator(model, input_size=input_size)
+    # print(se.estimate_size())
 
     # Returns
     # (size in megabytes, size in bits)

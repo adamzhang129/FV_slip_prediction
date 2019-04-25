@@ -375,6 +375,24 @@ def _main():
     plt.show()
 
 
+def load_state_dict(model, path_list):
+
+    model_dict = model.state_dict()
+    # for key, value in model_dict.iteritems():
+    #     print key
+
+    for type_key, path in path_list.iteritems():
+        # print '-----------------------------'
+        pretrained_dict = torch.load(path)
+        # for key, value in pretrained_dict.iteritems():
+        #     print key
+
+        # 1. filter out unnecessary keys
+        pretrained_dict = {(type_key + '.' + k): v for k, v in pretrained_dict.items() if (type_key + '.' + k) in model_dict}
+        # 2. overwrite entries in the existing state dict
+        model_dict.update(pretrained_dict)
+        # 3. load the new state dict
+        model.load_state_dict(model_dict)
 
 
 if __name__ == '__main__':
